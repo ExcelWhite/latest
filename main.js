@@ -3,79 +3,90 @@ const ctx = canvas.getContext("2d");
 const overlay = document.getElementById("overlay");
 const overlayContent = document.getElementById("overlayContent");
 const currentScoreEl = document.getElementById("currentScore");
-const highScoreDisplay = document.getElementById("highScore");
+const highScoreEl = document.getElementById("highScore");
 
 const box = 20;
+const COLS = canvas.width / box;
+const ROWS = canvas.height / box;
+let score = 0;
+let highScore = parseInt(localStorage.getItem("snakeHighScore") || "0");
+highScoreEl.textContent = highScore;
 
 let snake = [
-    {x: 200, y: 200},
-    {x:180, y:200},
-    {x:160, y:200},
-    {x:140, y:200}
-]
-
-const fruitList = ["🍎", "🍌", "🍇", "🍓", "🍊"];
-let fruits = [];
-fruits = generateFruits(5);
-
-let score = 0;
-let highScore = parseInt(localStorage.getItem("snakeHighScore")) || 0;
-highScoreDisplay.textContent = highScore;
-
-function draw() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    snake.forEach((segment, index) => {
-        ctx.fillStyle = index === 0 ? "lime" : "green";
-        ctx.beginPath();
-
-        ctx.roundRect(segment.x, segment.y, box, box, 6);
-        ctx.fill();
-    })
-
-    ctx.font = "20px Arial";
-    fruits.forEach(fruit => {
-        ctx.fillText(fruit.emoji, fruit.x + 2, fruit.y + 18);
-    })
-}
-
-draw();
+    { x: 200, y: 200 },
+    { x: 180, y: 200 },
+    { x: 160, y: 200 },
+    { x: 140, y: 200 }
+];
 
 let direction = null;
 let lastDirection = null;
 let gameStarted = false;
+let gameOver = false;
 
 let lastTime = 0;
 const speed = 180;
-let isPaused = false;
+
+const fruitsList = ["🍎", "🍌", "🍇", "🍓", "🍊"];
+let fruits = [];
+fruits = generateFruits(3);
+
+// Generates `count` fruits that don't overlap the snake or already-placed fruits.
+// Must be called AFTER the snake array reflects its current state for the tick.
+function generateFruits(count) {
+    const occupied = new Set();
+    snake.forEach(s => occupied.add(s.x + "," + s.y));
+    fruits.forEach(f => occupied.add(f.x + "," + f.y));
+
+    const arr = [];
+    let attempts = 0;
+    while (arr.length < count && attempts < 1000) {
+    attempts++;
+    const x = Math.floor(Math.random() * COLS) * box;
+    const y = Math.floor(Math.random() * ROWS) * box;
+    const key = x + "," + y;
+    if (!occupied.has(key)) {
+        occupied.add(key);
+        arr.push({ x, y, emoji: fruitsList[Math.floor(Math.random() * fruitsList.length)] });
+    }
+    }
+    return arr;
+}
+
+function saveHighScore() {
+    if (score > highScore) {
+    highScore = score;
+    localStorage.setItem("snakeHighScore", highScore);
+    highScoreEl.textContent = highScore;
+    }
+}
 
 document.addEventListener("keydown", changeDirection);
 
 function changeDirection(event) {
-    // to pause and play the game with the same key p
-    if(event.key.toLowerCase() === "p") {
-        isPaused = !isPaused;
-        return;
+    if (gameOver) return;
+
+    if (!gameStarted && ["ArrowLeft","ArrowUp","ArrowRight","ArrowDown"].includes(event.key)) {
+    gameStarted = true;
+    overlay.classList.add("hidden");
     }
 
-    // how we start the game by pressing an arrow key
-    if(!gameStarted && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) {
-        gameStarted = true;
+    if      (event.key === "ArrowLeft"  && lastDirection !== "RIGHT") direction = "LEFT";
+    else if (event.key === "ArrowUp"    && lastDirection !== "DOWN")  direction = "UP";
+    else if (event.key === "ArrowRight" && lastDirection !== "LEFT")  direction = "RIGHT";
+    else if (event.key === "ArrowDown"  && lastDirection !== "UP")    direction = "DOWN";
+}
+
+function gameLoop(time) {
+    if (gameOver) return;
+
+    if (gameStarted && time - lastTime > speed) {
+    update();
+    lastTime = time;
     }
 
-    if(event.key === "ArrowLeft" && lastDirection !== "RIGHT") {
-        direction = "LEFT";
-    }
-    if(event.key === "ArrowRight" && lastDirection !== "LEFT") {
-        direction = "RIGHT";
-    }
-    if(event.key === "ArrowUp" && lastDirection !== "DOWN") {
-        direction = "UP";
-    }
-    if(event.key === "ArrowDown" && lastDirection !== "UP") {
-        direction = "DOWN";
-    }
-
+    draw();
+    requestAnimationFrame(gameLoop);
 }
 
 function update() {
@@ -122,48 +133,6 @@ function update() {
     }
 }
 
-document.addEventListener("keydown", changeDirection);
-
-function gameLoop(time) {
-    if (gameOver) return;
-
-    if (gameStarted && time - lastTime > speed) {
-    update();
-    lastTime = time;
-    }
-
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
-function generateFruits(count) {
-    const occupied = new Set();
-    snake.forEach(s => occupied.add(s.x + "," + s.y));
-    fruits.forEach(f => occupied.add(f.x + "," + f.y));
-
-    const arr = [];
-    let attempts = 0;
-    while(arr.lenth < count && attempts < 1000) {
-        attempts++;
-        const x = Math.floor(Math.random() * (canvas.width / box)) * box;
-        const y = Math.floor(Math.random() * (canvas.height / box)) * box;
-        const key = x + "," + y;
-        if(!occupied.has(key)) {
-            occupied.add(key);
-            arr.push({x, y, emoji: fruitList[Math.floor(Math.random() * fruitList.length)]});
-        }
-    }
-    return arr;
-}
-
-function saveHighScore() {
-    if (score > highScore) {
-        higheScore = score;
-        localStorage.setItem("snakeHighScore", highScore);
-        highScoreDisplay.textContent = highScore;
-    }
-}
-
 function triggerGameOver() {
     gameOver = true;
     saveHighScore();
@@ -203,6 +172,22 @@ function restartGame() {
 
     lastTime = 0;
     requestAnimationFrame(gameLoop);
+}
+
+function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    snake.forEach((segment, index) => {
+    ctx.fillStyle = index === 0 ? "lime" : "green";
+    ctx.beginPath();
+    ctx.roundRect(segment.x, segment.y, box, box, 6);
+    ctx.fill();
+    });
+
+    ctx.font = "20px Arial";
+    fruits.forEach(fruit => {
+    ctx.fillText(fruit.emoji, fruit.x + 2, fruit.y + 18);
+    });
 }
 
 function collision(item, array) {
